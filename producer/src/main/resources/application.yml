@@ -1,0 +1,5 @@
+spring:
+  application:
+    name: producer
+server:
+  port: 8081

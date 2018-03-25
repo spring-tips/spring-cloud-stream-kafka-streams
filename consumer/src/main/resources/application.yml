@@ -1,0 +1,17 @@
+
+spring.cloud.stream.bindings.input:
+  destination: domain-events
+  consumer:
+    headerMode: raw
+spring.cloud.stream.kafka.streams.binder:
+  brokers: localhost #192.168.99.100
+  zkNodes: localhost #192.168.99.100
+  configuration:
+    default.key.serde: org.apache.kafka.common.serialization.Serdes$StringSerde
+    default.value.serde: com.example.wordcount.DomainEventSerde
+    commit.interval.ms: 1000
+spring:
+  application:
+    name: consumer
+server:
+  port: 8082
