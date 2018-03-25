@@ -6,18 +6,15 @@ import lombok.NoArgsConstructor;
 import lombok.ToString;
 import lombok.extern.java.Log;
 import org.apache.kafka.common.serialization.StringSerializer;
-import org.apache.kafka.streams.kstream.KStream;
 import org.springframework.boot.ApplicationRunner;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.boot.autoconfigure.kafka.KafkaProperties;
-import org.springframework.cloud.stream.annotation.Input;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.kafka.core.DefaultKafkaProducerFactory;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.kafka.core.ProducerFactory;
-import org.springframework.kafka.support.serializer.JsonSerde;
 import org.springframework.kafka.support.serializer.JsonSerializer;
 
 import java.time.Instant;
@@ -63,19 +60,10 @@ public class ProducerApplication {
 		for (int i = 0; i < 10; i++) {
 		 int randomPtr = (int) (Math.random() * (uids.size() - 1));
 		 DomainEvent ddEvent = new DomainEvent(Instant.now().toString(), uids.get(randomPtr));
-		 log.info("sending " + DomainEvent.class.getName() + ": " + ddEvent.toString());
-		 template.send("domain-events", ddEvent);
+ 		 template.send("domain-events", ddEvent);
 		}
 	 };
 	}
- }
-}
-
-@SuppressWarnings("ignored")
-class DomainEventSerde extends JsonSerde<DomainEvent> {
-
- public DomainEventSerde() {
-	super(DomainEvent.class);
  }
 }
 
@@ -85,10 +73,4 @@ class DomainEventSerde extends JsonSerde<DomainEvent> {
 @ToString
 class DomainEvent {
  private String eventType, boardUuid;
-}
-
-
-interface KafkaStreamsProcessorX {
- @Input("input")
- KStream<?, ?> input();
 }

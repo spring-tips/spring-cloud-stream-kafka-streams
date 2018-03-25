@@ -4,8 +4,13 @@ import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 import lombok.extern.java.Log;
+import org.apache.kafka.common.serialization.Serdes;
+import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.KTable;
+import org.apache.kafka.streams.kstream.Materialized;
+import org.apache.kafka.streams.kstream.Serialized;
+import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.QueryableStoreTypes;
 import org.apache.kafka.streams.state.ReadOnlyKeyValueStore;
 import org.springframework.boot.SpringApplication;
@@ -15,9 +20,18 @@ import org.springframework.cloud.stream.annotation.Input;
 import org.springframework.cloud.stream.annotation.StreamListener;
 import org.springframework.cloud.stream.binder.kafka.streams.QueryableStoreRegistry;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.kafka.support.serializer.JsonSerde;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.util.ArrayList;
+import java.util.Collection;
+
+@Log
+@RestController
+@Configuration
+@EnableBinding(SimpleKafkaStreamsProcessor.class)
 @SpringBootApplication
 public class ConsumerApplication {
 
@@ -25,34 +39,49 @@ public class ConsumerApplication {
 	SpringApplication.run(ConsumerApplication.class, args);
  }
 
- @Log
- @RestController
- @Configuration
- @EnableBinding(KafkaStreamsProcessorX.class)
- public static class ConsumerConfig {
+ private final QueryableStoreRegistry queryableStoreRegistry;
 
-	private final QueryableStoreRegistry queryableStoreRegistry;
-
-	public ConsumerConfig(QueryableStoreRegistry queryableStoreRegistry) {
-	 this.queryableStoreRegistry = queryableStoreRegistry;
-	}
-
-	@StreamListener("input")
-	public void process(KStream<String, DomainEvent> input) {
-	 KTable<String, Long> longCountValue =
-		 input
-			 .groupBy((key, value) -> value.getBoardUuid())
-			 .count();
-	 longCountValue.foreach((key, value) -> log.info(String.format("%s shows up %s times.", key, value)));
-	}
-
-	@RequestMapping("/events")
-	public String events() {
-	 ReadOnlyKeyValueStore<String, String> topFiveStore =
-		 queryableStoreRegistry.getQueryableStoreType("test-events-snapshots", QueryableStoreTypes.<String, String>keyValueStore());
-	 return topFiveStore.get("12345");
-	}
+ public ConsumerApplication(
+	 QueryableStoreRegistry queryableStoreRegistry) {
+	this.queryableStoreRegistry = queryableStoreRegistry;
  }
+
+ @StreamListener(SimpleKafkaStreamsProcessor.INPUT)
+ public void process(KStream<String, DomainEvent> input) {
+
+	KTable<String, Aggregate> table = input
+		.groupBy((s, domainEvent) -> domainEvent.getBoardUuid(), Serialized.with(null, new JsonSerde<>(DomainEvent.class)))
+		.aggregate(
+			Aggregate::new,
+			(key, value, aggregate) -> aggregate.addDomainEvent(value),
+			Materialized.<String, Aggregate, KeyValueStore<Bytes, byte[]>>as("test-events-snapshots")
+				.withKeySerde(Serdes.String())
+				.withValueSerde(new JsonSerde<>(Aggregate.class))
+		);
+	table
+		.toStream()
+		.foreach((key, value) -> log.info(key + '=' + value));
+ }
+
+ @RequestMapping("/events/{key}")
+ public Aggregate events(@PathVariable String key) {
+	ReadOnlyKeyValueStore<String, Aggregate> queryableStoreType =
+		queryableStoreRegistry.getQueryableStoreType("test-events-snapshots", QueryableStoreTypes.<String, Aggregate>keyValueStore());
+	return queryableStoreType.get(key);
+ }
+}
+
+@Data
+@AllArgsConstructor
+@NoArgsConstructor
+class Aggregate {
+
+ public Aggregate addDomainEvent(DomainEvent event) {
+	this.eventTypes.add(event.getEventType());
+	return this;
+ }
+
+ private Collection<String> eventTypes = new ArrayList<>();
 }
 
 @Data
@@ -63,9 +92,10 @@ class DomainEvent {
  private String boardUuid;
 }
 
+interface SimpleKafkaStreamsProcessor {
 
-interface KafkaStreamsProcessorX {
- @Input("input")
+ String INPUT = "input";
+
+ @Input(INPUT)
  KStream<?, ?> input();
 }
-
