@@ -28,6 +28,9 @@ import org.springframework.web.bind.annotation.RestController;
 import java.util.ArrayList;
 import java.util.Collection;
 
+/**
+ * TODO conjure up an example where we join with another stream somehow
+ */
 @Log
 @RestController
 @Configuration
