@@ -14,7 +14,9 @@ import org.springframework.cloud.stream.annotation.Input;
 import org.springframework.cloud.stream.annotation.Output;
 import org.springframework.cloud.stream.annotation.StreamListener;
 import org.springframework.cloud.stream.config.BindingServiceProperties;
-import org.springframework.kafka.core.KafkaTemplate;
+import org.springframework.messaging.Message;
+import org.springframework.messaging.MessageChannel;
+import org.springframework.messaging.support.MessageBuilder;
 import org.springframework.stereotype.Component;
 
 import java.util.Arrays;
@@ -41,22 +43,14 @@ public class StocksApplication {
  @Component
  public static class MyProducer implements ApplicationRunner {
 
-	private final ScheduledExecutorService executors = Executors.newScheduledThreadPool(
-		Runtime.getRuntime().availableProcessors());
-
-	private final KafkaTemplate<String, Ticker> tickerKafkaTemplate;
-
-	private final KafkaTemplate<String, Order> orderKafkaTemplate;
-
+	private final ScheduledExecutorService executors = Executors.newScheduledThreadPool(Runtime.getRuntime().availableProcessors());
+	private final MessageChannel orders, tickers;
 	private final BindingServiceProperties bindingServiceProperties;
 
-	MyProducer(
-		KafkaTemplate<String, Ticker> tickerKafkaTemplate,
-		KafkaTemplate<String, Order> orderKafkaTemplate,
-		BindingServiceProperties bindingServiceProperties) {
+	MyProducer(StocksChannels channels, BindingServiceProperties bindingServiceProperties) {
 	 this.bindingServiceProperties = bindingServiceProperties;
-	 this.tickerKafkaTemplate = tickerKafkaTemplate;
-	 this.orderKafkaTemplate = orderKafkaTemplate;
+	 this.orders = channels.ordersOut();
+	 this.tickers = channels.tickersOut();
 	}
 
 	private String topicForBinding(String bindingName) {
@@ -67,38 +61,31 @@ public class StocksApplication {
 
 	@Override
 	public void run(ApplicationArguments args) {
-	 log.info("run(" + args.toString() + ")");
-
-	 String orders = topicForBinding(StocksChannels.ORDERS_INBOUND);
-	 String tickers = topicForBinding(StocksChannels.TICKERS_OUTBOUND);
 
 	 List<String> users = Arrays.asList("josh", "jane", "rod", "mario", "andrew", "tasha");
 	 List<String> stocks = Arrays.asList("VMW", "GOOG", "IBM", "MSFT", "ORCL", "RHT");
 
-	 Runnable tickersRunnable = () -> {
-		stocks
-			.stream()
-			.map(stock -> new Ticker(stock, (float) (Math.random() * 1000)))
-			.forEach(ticker -> tickerKafkaTemplate.send(tickers, ticker));
-	 };
+	 Runnable tickersRunnable = () ->
+		 stocks
+			 .stream()
+			 .map(stock -> new Ticker(stock, (float) (Math.random() * 1000)))
+			 .map(ticker -> MessageBuilder.withPayload(ticker).build())
+			 .forEach(this.tickers::send);
 
-/*
 	 Runnable ordersRunnable = () -> {
 		for (int i = 0; i < 10; i++) {
-		 log.info("sending to " + orders + ".");
 		 Order order = new Order(
 			 random(users),
 			 random(stocks),
 			 new Date(),
 			 (float) (Math.random() * 1000), (float) (Math.random() * 10));
-		 log.info("about to send..");
-		 orderKafkaTemplate.send(orders, order);
-		 log.info("sent!");
+		 Message<Order> message = MessageBuilder.withPayload(order).build();
+		 this.orders.send(message);
 		}
-	 };*/
+	 };
 
 	 this.executors.scheduleWithFixedDelay(tickersRunnable, 1, 1, TimeUnit.SECONDS);
-//	 this.executors.scheduleWithFixedDelay(ordersRunnable, 1, 1, TimeUnit.SECONDS);
+	 this.executors.scheduleWithFixedDelay(ordersRunnable, 1, 1, TimeUnit.SECONDS);
 	}
 
 	private <T> T random(List<T> search) {
@@ -168,10 +155,15 @@ interface StocksChannels {
  String TICKERS_INBOUND = "tickersInbound";
  String ORDERS_INBOUND = "ordersInbound";
 
- @Input(ORDERS_INBOUND) KStream<String, Order> ordersIn();
- @Output(ORDERS_OUTBOUND) KStream<String, Order> ordersOut();
+ @Input(ORDERS_INBOUND)
+ KStream<String, Order> ordersIn();
 
- @Input(TICKERS_INBOUND) KStream<String, Ticker> tickersIn();
- @Input(TICKERS_OUTBOUND) KStream<String, Ticker> tickersOut();
+ @Input(TICKERS_INBOUND)
+ KStream<String, Ticker> tickersIn();
 
+ @Output(TICKERS_OUTBOUND)
+ MessageChannel tickersOut();
+
+ @Output(ORDERS_OUTBOUND)
+ MessageChannel ordersOut();
 }
