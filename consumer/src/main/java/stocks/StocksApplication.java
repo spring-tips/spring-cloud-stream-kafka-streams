@@ -11,6 +11,7 @@ import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.cloud.stream.annotation.EnableBinding;
 import org.springframework.cloud.stream.annotation.Input;
+import org.springframework.cloud.stream.annotation.Output;
 import org.springframework.cloud.stream.annotation.StreamListener;
 import org.springframework.cloud.stream.config.BindingServiceProperties;
 import org.springframework.kafka.core.KafkaTemplate;
@@ -68,7 +69,7 @@ public class StocksApplication {
 	public void run(ApplicationArguments args) {
 	 log.info("run(" + args.toString() + ")");
 
-	 // String orders = topicForBinding(StocksChannels.ORDERS_INBOUND);
+	 String orders = topicForBinding(StocksChannels.ORDERS_INBOUND);
 	 String tickers = topicForBinding(StocksChannels.TICKERS_OUTBOUND);
 
 	 List<String> users = Arrays.asList("josh", "jane", "rod", "mario", "andrew", "tasha");
@@ -161,26 +162,16 @@ class Order {
 
 interface StocksChannels {
 
- // String ORDERS_OUTBOUND = "ordersOutbound";
+ String ORDERS_OUTBOUND = "ordersOutbound";
  String TICKERS_OUTBOUND = "tickersOutbound";
 
  String TICKERS_INBOUND = "tickersInbound";
-// String ORDERS_INBOUND = "ordersInbound";
-//
-// @Input(ORDERS_INBOUND)
-// KStream<String, Order> ordersInbound();
+ String ORDERS_INBOUND = "ordersInbound";
 
- @Input(TICKERS_INBOUND)
- KStream<String, Ticker> tickersIn();
+ @Input(ORDERS_INBOUND) KStream<String, Order> ordersIn();
+ @Output(ORDERS_OUTBOUND) KStream<String, Order> ordersOut();
 
- @Input(TICKERS_OUTBOUND)
- KStream<String, Ticker> tickersOut();
+ @Input(TICKERS_INBOUND) KStream<String, Ticker> tickersIn();
+ @Input(TICKERS_OUTBOUND) KStream<String, Ticker> tickersOut();
 
- /*
- @Output(ORDERS_OUTBOUND)
- KStream<String, Order> ordersOutbound();
-
- @Output(TICKERS_OUTBOUND)
- KStream<String, Order> tickersOutbound();
-*/
 }
