@@ -53,7 +53,7 @@ public class ConsumerApplication {
  public void process(KStream<String, DomainEvent> input) {
 
 	KTable<String, Aggregate> table = input
-		.groupBy((s, domainEvent) -> domainEvent.getBoardUuid(), Serialized.with(null, new JsonSerde<>(DomainEvent.class)))
+		.groupBy((s, domainEvent) -> domainEvent.getBoardUuid(), Serialized.with(Serdes.String (), new JsonSerde<>(DomainEvent.class)))
 		.aggregate(
 			Aggregate::new,
 			(key, value, aggregate) -> aggregate.addDomainEvent(value),
