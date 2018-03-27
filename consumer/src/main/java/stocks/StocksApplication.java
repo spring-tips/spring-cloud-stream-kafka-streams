@@ -1,8 +1,8 @@
 package stocks;
 
-import com.fasterxml.jackson.annotation.JsonCreator;
-import com.fasterxml.jackson.annotation.JsonProperty;
+import lombok.AllArgsConstructor;
 import lombok.Data;
+import lombok.NoArgsConstructor;
 import lombok.extern.java.Log;
 import org.apache.kafka.streams.kstream.KStream;
 import org.springframework.boot.ApplicationArguments;
@@ -13,8 +13,6 @@ import org.springframework.cloud.stream.annotation.EnableBinding;
 import org.springframework.cloud.stream.annotation.Input;
 import org.springframework.cloud.stream.annotation.Output;
 import org.springframework.cloud.stream.annotation.StreamListener;
-import org.springframework.cloud.stream.config.BindingServiceProperties;
-import org.springframework.messaging.Message;
 import org.springframework.messaging.MessageChannel;
 import org.springframework.messaging.support.MessageBuilder;
 import org.springframework.stereotype.Component;
@@ -25,6 +23,7 @@ import java.util.List;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
+import java.util.stream.IntStream;
 
 /**
  * two streams:
@@ -45,18 +44,10 @@ public class StocksApplication {
 
 	private final ScheduledExecutorService executors = Executors.newScheduledThreadPool(Runtime.getRuntime().availableProcessors());
 	private final MessageChannel orders, tickers;
-	private final BindingServiceProperties bindingServiceProperties;
 
-	MyProducer(StocksChannels channels, BindingServiceProperties bindingServiceProperties) {
-	 this.bindingServiceProperties = bindingServiceProperties;
+	MyProducer(StocksChannels channels) {
 	 this.orders = channels.ordersOut();
 	 this.tickers = channels.tickersOut();
-	}
-
-	private String topicForBinding(String bindingName) {
-	 return this.bindingServiceProperties
-		 .getBindingProperties(bindingName)
-		 .getDestination();
 	}
 
 	@Override
@@ -72,17 +63,17 @@ public class StocksApplication {
 			 .map(ticker -> MessageBuilder.withPayload(ticker).build())
 			 .forEach(this.tickers::send);
 
-	 Runnable ordersRunnable = () -> {
-		for (int i = 0; i < 10; i++) {
-		 Order order = new Order(
-			 random(users),
-			 random(stocks),
-			 new Date(),
-			 (float) (Math.random() * 1000), (float) (Math.random() * 10));
-		 Message<Order> message = MessageBuilder.withPayload(order).build();
-		 this.orders.send(message);
-		}
-	 };
+	 Runnable ordersRunnable = () ->
+		 IntStream
+			 .range(0, 10)
+			 .mapToObj(indx -> new Order(
+				 random(users),
+				 random(stocks),
+				 new Date(),
+				 (float) (Math.random() * 1000),
+				 (float) (Math.random() * 10)))
+			 .map(o -> MessageBuilder.withPayload(o).build())
+			 .forEach(this.orders::send);
 
 	 this.executors.scheduleWithFixedDelay(tickersRunnable, 1, 1, TimeUnit.SECONDS);
 	 this.executors.scheduleWithFixedDelay(ordersRunnable, 1, 1, TimeUnit.SECONDS);
@@ -94,16 +85,31 @@ public class StocksApplication {
 	}
  }
 
+
  @Log
  @Component
- public static class MyConsumer {
+ public static class TickerConsumer {
 
 	@StreamListener
 	public void process(
-		@Input(StocksChannels.TICKERS_INBOUND) KStream<String, Ticker> orderKStream) {
-	 orderKStream
-		 .foreach((key, value) -> log.info(key + '=' + value));
+		@Input(StocksChannels.TICKERS_INBOUND) KStream<String, Ticker> tickers,
+		@Input(StocksChannels.ORDERS_INBOUND) KStream<String, Order> orders) {
+
+	 orders.foreach((key, value) -> log.info(key + '=' + value));
+	 tickers.foreach((k, v) -> log.info(k + '=' + v));
 	}
+ }
+
+ /*@Log
+ @Component*/
+ public static class OrderConsumer {
+
+	@StreamListener
+	public void orders(@Input(StocksChannels.ORDERS_INBOUND) KStream<String, Order> orderKStream) {
+	 orderKStream
+		 .foreach((key, value) -> log.info(key + "=" + value));
+	}
+
  }
 
  public static void main(String args[]) {
@@ -112,38 +118,33 @@ public class StocksApplication {
 }
 
 @Data
+@NoArgsConstructor
+@AllArgsConstructor
 class Ticker {
  private String symbol;
  private float price;
-
- @JsonCreator
- public Ticker(@JsonProperty("symbol") String s, @JsonProperty("price") float p) {
-	this.symbol = s;
-	this.price = p;
- }
 }
 
-
 @Data
+@NoArgsConstructor
 class Order {
 
+ private String userId;
  private String ticker;
  private Date when;
  private float price;
  private float shares;
- private String userId;
 
- @JsonCreator
- Order(@JsonProperty("userId") String u,
-			 @JsonProperty("ticker") String t,
-			 @JsonProperty("when") Date w,
-			 @JsonProperty("price") float p,
-			 @JsonProperty("shares") float s) {
-	this.shares = s;
-	this.price = p;
-	this.userId = u;
-	this.when = w;
-	this.ticker = t;
+ public Order(String userId,
+							String ticker,
+							Date when,
+							float price,
+							float shares) {
+	this.userId = userId;
+	this.ticker = ticker;
+	this.when = when;
+	this.price = price;
+	this.shares = shares;
  }
 }
 
