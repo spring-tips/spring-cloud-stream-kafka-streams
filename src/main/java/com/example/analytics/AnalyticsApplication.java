@@ -6,6 +6,7 @@ import lombok.NoArgsConstructor;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.apache.kafka.streams.KeyValue;
+import org.apache.kafka.streams.kstream.ForeachAction;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.Materialized;
@@ -121,7 +122,9 @@ public class AnalyticsApplication {
 				private final Log log = LogFactory.getLog(getClass());
 
 				@StreamListener
-				public void process(@Input((AnalyticsBinding.PAGE_COUNT_IN)) KTable<String, Long> counts) {
+				public void pageCount(@Input((AnalyticsBinding.PAGE_COUNT_IN)) KTable<String, Long> counts) {
+
+
 						counts
 							.toStream()
 							.foreach((key, value) -> log.info(key + "=" + value));
