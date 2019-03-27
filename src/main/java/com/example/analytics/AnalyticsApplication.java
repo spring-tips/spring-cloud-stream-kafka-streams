@@ -1,12 +1,19 @@
 package com.example.analytics;
 
+import java.util.Arrays;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Random;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
+
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.apache.kafka.streams.KeyValue;
-import org.apache.kafka.streams.kstream.ForeachAction;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.Materialized;
@@ -21,7 +28,7 @@ import org.springframework.cloud.stream.annotation.EnableBinding;
 import org.springframework.cloud.stream.annotation.Input;
 import org.springframework.cloud.stream.annotation.Output;
 import org.springframework.cloud.stream.annotation.StreamListener;
-import org.springframework.cloud.stream.binder.kafka.streams.QueryableStoreRegistry;
+import org.springframework.cloud.stream.binder.kafka.streams.InteractiveQueryService;
 import org.springframework.kafka.support.KafkaHeaders;
 import org.springframework.messaging.Message;
 import org.springframework.messaging.MessageChannel;
@@ -30,10 +37,6 @@ import org.springframework.messaging.support.MessageBuilder;
 import org.springframework.stereotype.Component;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RestController;
-
-import java.util.*;
-import java.util.concurrent.Executors;
-import java.util.concurrent.TimeUnit;
 
 
 interface AnalyticsBinding {
@@ -123,8 +126,6 @@ public class AnalyticsApplication {
 
 				@StreamListener
 				public void pageCount(@Input((AnalyticsBinding.PAGE_COUNT_IN)) KTable<String, Long> counts) {
-
-
 						counts
 							.toStream()
 							.foreach((key, value) -> log.info(key + "=" + value));
@@ -134,17 +135,18 @@ public class AnalyticsApplication {
 		@RestController
 		public static class CountRestController {
 
-				private final QueryableStoreRegistry registry;
+				private final InteractiveQueryService interactiveQueryService;
 
-				public CountRestController(QueryableStoreRegistry registry) {
-						this.registry = registry;
+				public CountRestController(InteractiveQueryService interactiveQueryService) {
+						this.interactiveQueryService = interactiveQueryService;
 				}
 
 				@GetMapping("/counts")
 				Map<String, Long> counts() {
 						Map<String, Long> counts = new HashMap<>();
 						ReadOnlyKeyValueStore<String, Long> queryableStoreType =
-							this.registry.getQueryableStoreType(AnalyticsBinding.PAGE_COUNT_MV, QueryableStoreTypes.keyValueStore());
+							this.interactiveQueryService
+								.getQueryableStore(AnalyticsBinding.PAGE_COUNT_MV, QueryableStoreTypes.keyValueStore());
 						KeyValueIterator<String, Long> all = queryableStoreType.all();
 						while (all.hasNext()) {
 								KeyValue<String, Long> value = all.next();
