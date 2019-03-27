@@ -21,6 +21,7 @@ import org.springframework.cloud.stream.annotation.EnableBinding;
 import org.springframework.cloud.stream.annotation.Input;
 import org.springframework.cloud.stream.annotation.Output;
 import org.springframework.cloud.stream.annotation.StreamListener;
+import org.springframework.cloud.stream.binder.kafka.streams.InteractiveQueryService;
 import org.springframework.cloud.stream.binder.kafka.streams.QueryableStoreRegistry;
 import org.springframework.kafka.support.KafkaHeaders;
 import org.springframework.messaging.Message;
@@ -123,8 +124,6 @@ public class AnalyticsApplication {
 
 				@StreamListener
 				public void pageCount(@Input((AnalyticsBinding.PAGE_COUNT_IN)) KTable<String, Long> counts) {
-
-
 						counts
 							.toStream()
 							.foreach((key, value) -> log.info(key + "=" + value));
@@ -134,17 +133,18 @@ public class AnalyticsApplication {
 		@RestController
 		public static class CountRestController {
 
-				private final QueryableStoreRegistry registry;
+				private final InteractiveQueryService interactiveQueryService;
 
-				public CountRestController(QueryableStoreRegistry registry) {
-						this.registry = registry;
+				public CountRestController(InteractiveQueryService interactiveQueryService) {
+						this.interactiveQueryService = interactiveQueryService;
 				}
 
 				@GetMapping("/counts")
 				Map<String, Long> counts() {
 						Map<String, Long> counts = new HashMap<>();
 						ReadOnlyKeyValueStore<String, Long> queryableStoreType =
-							this.registry.getQueryableStoreType(AnalyticsBinding.PAGE_COUNT_MV, QueryableStoreTypes.keyValueStore());
+							this.interactiveQueryService
+								.getQueryableStore(AnalyticsBinding.PAGE_COUNT_MV, QueryableStoreTypes.keyValueStore());
 						KeyValueIterator<String, Long> all = queryableStoreType.all();
 						while (all.hasNext()) {
 								KeyValue<String, Long> value = all.next();
